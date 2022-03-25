@@ -3,38 +3,49 @@ package controller
 import (
 	"fmt"
 	"html/template"
+	"net/http"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"code.cloudfoundry.org/bytefmt"
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 
 	"github.com/naiba/nezha/pkg/mygin"
-	"github.com/naiba/nezha/service/dao"
+	"github.com/naiba/nezha/service/singleton"
 )
 
-func ServeWeb(port uint) {
+func ServeWeb(port uint) *http.Server {
 	gin.SetMode(gin.ReleaseMode)
-	if dao.Conf.Debug {
-		gin.SetMode(gin.DebugMode)
-	}
 	r := gin.Default()
+	if singleton.Conf.Debug {
+		gin.SetMode(gin.DebugMode)
+		pprof.Register(r)
+	}
 	r.Use(mygin.RecordPath)
 	r.SetFuncMap(template.FuncMap{
 		"tf": func(t time.Time) string {
-			return t.Format("2006年1月2号 15:04:05")
+			return t.In(singleton.Loc).Format("2006年1月2号 15:04:05")
+		},
+		"len": func(slice []interface{}) string {
+			return strconv.Itoa(len(slice))
 		},
 		"safe": func(s string) template.HTML {
-			return template.HTML(s)
+			return template.HTML(s) // #nosec
 		},
 		"tag": func(s string) template.HTML {
-			return template.HTML(`<` + s + `>`)
+			return template.HTML(`<` + s + `>`) // #nosec
 		},
 		"stf": func(s uint64) string {
-			return time.Unix(int64(s), 0).Format("2006年1月2号 15:04")
+			return time.Unix(int64(s), 0).In(singleton.Loc).Format("2006年1月2号 15:04")
 		},
 		"sf": func(duration uint64) string {
 			return time.Duration(time.Duration(duration) * time.Second).String()
+		},
+		"sft": func(future time.Time) string {
+			return time.Until(future).Round(time.Second).String()
 		},
 		"bf": func(b uint64) string {
 			return bytefmt.ByteSize(b)
@@ -54,7 +65,7 @@ func ServeWeb(port uint) {
 			}
 			if a == 0 {
 				// 这是从未在线的情况
-				return 1 / float32(b) * 100
+				return 0.00001 / float32(b) * 100
 			}
 			return float32(a) / float32(b) * 100
 		},
@@ -67,7 +78,7 @@ func ServeWeb(port uint) {
 			}
 			if a == 0 {
 				// 这是从未在线的情况
-				return 1 / float32(b) * 100
+				return 0.00001 / float32(b) * 100
 			}
 			return float32(a) / float32(b) * 100
 		},
@@ -108,14 +119,31 @@ func ServeWeb(port uint) {
 		},
 	})
 	r.Static("/static", "resource/static")
-	r.LoadHTMLGlob("resource/template/**/*")
+	r.LoadHTMLGlob("resource/template/**/*.html")
 	routers(r)
-	r.Run(fmt.Sprintf(":%d", port))
+
+	page404 := func(c *gin.Context) {
+		mygin.ShowErrorPage(c, mygin.ErrInfo{
+			Code:  http.StatusNotFound,
+			Title: "该页面不存在",
+			Msg:   "该页面内容可能已着陆火星",
+			Link:  "/",
+			Btn:   "返回首页",
+		}, true)
+	}
+	r.NoRoute(page404)
+	r.NoMethod(page404)
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: r,
+	}
+	return srv
 }
 
 func routers(r *gin.Engine) {
 	// 通用页面
-	cp := commonPage{r}
+	cp := commonPage{r: r, terminals: make(map[string]*terminalContext), terminalsLock: new(sync.Mutex)}
 	cp.serve()
 	// 游客页面
 	gp := guestPage{r}

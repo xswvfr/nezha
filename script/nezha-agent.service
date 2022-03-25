@@ -1,7 +1,7 @@
 [Unit]
 Description=Nezha Agent
 After=syslog.target
-After=network.target
+#After=network.target
 #After=nezha-dashboard.service
 
 [Service]
@@ -15,16 +15,16 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/opt/nezha/agent/
-ExecStart=/opt/nezha/agent/nezha-agent -d -s nz_grpc_host:nz_grpc_port -p nz_client_secret
+ExecStart=/opt/nezha/agent/nezha-agent -s nz_grpc_host:nz_grpc_port -p nz_client_secret
 Restart=always
 #Environment=DEBUG=true
 
 # Some distributions may not support these hardening directives. If you cannot start the service due
 # to an unknown option, comment out the ones not supported by your version of systemd.
-ProtectSystem=full
-PrivateDevices=yes
-PrivateTmp=yes
-NoNewPrivileges=true
+#ProtectSystem=full
+#PrivateDevices=yes
+#PrivateTmp=yes
+#NoNewPrivileges=true
 
 [Install]
 WantedBy=multi-user.target

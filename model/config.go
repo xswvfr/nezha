@@ -1,11 +1,11 @@
 package model
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
+	"strings"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
 )
@@ -14,6 +14,39 @@ const (
 	ConfigTypeGitHub = "github"
 	ConfigTypeGitee  = "gitee"
 )
+
+const (
+	ConfigCoverAll = iota
+	ConfigCoverIgnoreAll
+)
+
+type AgentConfig struct {
+	HardDrivePartitionAllowlist []string
+	NICAllowlist                map[string]bool
+	v                           *viper.Viper
+}
+
+func (c *AgentConfig) Read(path string) error {
+	c.v = viper.New()
+	c.v.SetConfigFile(path)
+	err := c.v.ReadInConfig()
+	if err != nil {
+		return err
+	}
+	err = c.v.Unmarshal(c)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c *AgentConfig) Save() error {
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(c.v.ConfigFileUsed(), data, os.ModePerm)
+}
 
 type Config struct {
 	Debug bool
@@ -30,11 +63,21 @@ type Config struct {
 		ClientID     string
 		ClientSecret string
 	}
-	HTTPPort                   uint
-	GRPCPort                   uint
-	EnableIPChangeNotification bool
+	HTTPPort      uint
+	GRPCPort      uint
+	GRPCHost      string
+	ProxyGRPCPort uint
+	TLS           bool
 
-	v *viper.Viper
+	EnableIPChangeNotification  bool
+	EnablePlainIPInNotification bool
+
+	// IP变更提醒
+	Cover                 uint8  // 覆盖范围
+	IgnoredIPNotification string // 特定服务器
+
+	v                              *viper.Viper
+	IgnoredIPNotificationServerIDs map[uint64]bool
 }
 
 func (c *Config) Read(path string) error {
@@ -54,16 +97,23 @@ func (c *Config) Read(path string) error {
 		c.Site.Theme = "default"
 	}
 
-	c.v.OnConfigChange(func(in fsnotify.Event) {
-		c.v.Unmarshal(c)
-		fmt.Println("配置文件更新，重载配置", c)
-	})
-
-	go c.v.WatchConfig()
+	c.updateIgnoredIPNotificationID()
 	return nil
 }
 
+func (c *Config) updateIgnoredIPNotificationID() {
+	c.IgnoredIPNotificationServerIDs = make(map[uint64]bool)
+	splitedIDs := strings.Split(c.IgnoredIPNotification, ",")
+	for i := 0; i < len(splitedIDs); i++ {
+		id, _ := strconv.ParseUint(splitedIDs[i], 10, 64)
+		if id > 0 {
+			c.IgnoredIPNotificationServerIDs[id] = true
+		}
+	}
+}
+
 func (c *Config) Save() error {
+	c.updateIgnoredIPNotificationID()
 	data, err := yaml.Marshal(c)
 	if err != nil {
 		return err

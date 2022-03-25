@@ -1,21 +1,21 @@
 package controller
 
 import (
-	"encoding/json"
+	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/robfig/cron/v3"
 
 	"github.com/naiba/nezha/model"
 	"github.com/naiba/nezha/pkg/mygin"
 	"github.com/naiba/nezha/pkg/utils"
-	pb "github.com/naiba/nezha/proto"
-	"github.com/naiba/nezha/service/dao"
+	"github.com/naiba/nezha/proto"
+	"github.com/naiba/nezha/service/singleton"
 )
 
 type memberAPI struct {
@@ -37,6 +37,7 @@ func (ma *memberAPI) serve() {
 	mr.POST("/monitor", ma.addOrEditMonitor)
 	mr.POST("/cron", ma.addOrEditCron)
 	mr.GET("/cron/:id/manual", ma.manualTrigger)
+	mr.POST("/force-update", ma.forceUpdate)
 	mr.POST("/notification", ma.addOrEditNotification)
 	mr.POST("/alert-rule", ma.addOrEditAlertRule)
 	mr.POST("/setting", ma.updateSetting)
@@ -57,39 +58,53 @@ func (ma *memberAPI) delete(c *gin.Context) {
 	var err error
 	switch c.Param("model") {
 	case "server":
-		err = dao.DB.Delete(&model.Server{}, "id = ?", id).Error
+		err = singleton.DB.Unscoped().Delete(&model.Server{}, "id = ?", id).Error
 		if err == nil {
-			dao.ServerLock.Lock()
-			delete(dao.SecretToID, dao.ServerList[id].Secret)
-			delete(dao.ServerList, id)
-			dao.ServerLock.Unlock()
-			dao.ReSortServer()
+			// 删除服务器
+			singleton.ServerLock.Lock()
+			delete(singleton.SecretToID, singleton.ServerList[id].Secret)
+			delete(singleton.ServerList, id)
+			singleton.ServerLock.Unlock()
+			singleton.ReSortServer()
+			// 删除循环流量状态中的此服务器相关的记录
+			singleton.AlertsLock.Lock()
+			for i := 0; i < len(singleton.Alerts); i++ {
+				if singleton.AlertsCycleTransferStatsStore[singleton.Alerts[i].ID] != nil {
+					delete(singleton.AlertsCycleTransferStatsStore[singleton.Alerts[i].ID].ServerName, id)
+					delete(singleton.AlertsCycleTransferStatsStore[singleton.Alerts[i].ID].Transfer, id)
+					delete(singleton.AlertsCycleTransferStatsStore[singleton.Alerts[i].ID].NextUpdate, id)
+				}
+			}
+			singleton.AlertsLock.Unlock()
+			// 删除服务器相关循环流量记录
+			singleton.DB.Unscoped().Delete(&model.Transfer{}, "server_id = ?", id)
 		}
 	case "notification":
-		err = dao.DB.Delete(&model.Notification{}, "id = ?", id).Error
+		err = singleton.DB.Unscoped().Delete(&model.Notification{}, "id = ?", id).Error
 		if err == nil {
-			dao.OnDeleteNotification(id)
+			singleton.OnDeleteNotification(id)
 		}
 	case "monitor":
-		err = dao.DB.Delete(&model.Monitor{}, "id = ?", id).Error
+		err = singleton.DB.Unscoped().Delete(&model.Monitor{}, "id = ?", id).Error
 		if err == nil {
-			err = dao.DB.Delete(&model.MonitorHistory{}, "monitor_id = ?", id).Error
+			singleton.ServiceSentinelShared.OnMonitorDelete(id)
+			err = singleton.DB.Unscoped().Delete(&model.MonitorHistory{}, "monitor_id = ?", id).Error
 		}
 	case "cron":
-		err = dao.DB.Delete(&model.Cron{}, "id = ?", id).Error
+		err = singleton.DB.Unscoped().Delete(&model.Cron{}, "id = ?", id).Error
 		if err == nil {
-			dao.CronLock.RLock()
-			defer dao.CronLock.RUnlock()
-			cr := dao.Crons[id]
-			if cr != nil && cr.CronID != 0 {
-				dao.Cron.Remove(cr.CronID)
+			singleton.CronLock.RLock()
+			defer singleton.CronLock.RUnlock()
+			cr := singleton.Crons[id]
+			if cr != nil && cr.CronJobID != 0 {
+				singleton.Cron.Remove(cr.CronJobID)
 			}
-			delete(dao.Crons, id)
+			delete(singleton.Crons, id)
 		}
 	case "alert-rule":
-		err = dao.DB.Delete(&model.AlertRule{}, "id = ?", id).Error
+		err = singleton.DB.Unscoped().Delete(&model.AlertRule{}, "id = ?", id).Error
 		if err == nil {
-			dao.OnDeleteAlert(id)
+			singleton.OnDeleteAlert(id)
 		}
 	}
 	if err != nil {
@@ -113,7 +128,7 @@ type searchResult struct {
 func (ma *memberAPI) searchServer(c *gin.Context) {
 	var servers []model.Server
 	likeWord := "%" + c.Query("word") + "%"
-	dao.DB.Select("id,name").Where("id = ? OR name LIKE ? OR tag LIKE ? OR note LIKE ?",
+	singleton.DB.Select("id,name").Where("id = ? OR name LIKE ? OR tag LIKE ? OR note LIKE ?",
 		c.Query("word"), likeWord, likeWord, likeWord).Find(&servers)
 
 	var resp []searchResult
@@ -153,13 +168,13 @@ func (ma *memberAPI) addOrEditServer(c *gin.Context) {
 		s.ID = sf.ID
 		s.Tag = sf.Tag
 		s.Note = sf.Note
-		if sf.ID == 0 {
+		if s.ID == 0 {
 			s.Secret = utils.MD5(fmt.Sprintf("%s%s%d", time.Now(), sf.Name, admin.ID))
 			s.Secret = s.Secret[:18]
-			err = dao.DB.Create(&s).Error
+			err = singleton.DB.Create(&s).Error
 		} else {
 			isEdit = true
-			err = dao.DB.Save(&s).Error
+			err = singleton.DB.Save(&s).Error
 		}
 	}
 	if err != nil {
@@ -170,30 +185,40 @@ func (ma *memberAPI) addOrEditServer(c *gin.Context) {
 		return
 	}
 	if isEdit {
-		dao.ServerLock.RLock()
-		s.Host = dao.ServerList[s.ID].Host
-		s.State = dao.ServerList[s.ID].State
-		dao.ServerList[s.ID] = &s
-		dao.ServerLock.RUnlock()
+		singleton.ServerLock.Lock()
+		s.CopyFromRunningServer(singleton.ServerList[s.ID])
+		// 如果修改了 Secret
+		if s.Secret != singleton.ServerList[s.ID].Secret {
+			// 删除旧 Secret-ID 绑定关系
+			singleton.SecretToID[s.Secret] = s.ID
+			// 设置新的 Secret-ID 绑定关系
+			delete(singleton.SecretToID, singleton.ServerList[s.ID].Secret)
+		}
+		singleton.ServerList[s.ID] = &s
+		singleton.ServerLock.Unlock()
 	} else {
 		s.Host = &model.Host{}
 		s.State = &model.HostState{}
-		dao.ServerLock.Lock()
-		dao.SecretToID[s.Secret] = s.ID
-		dao.ServerList[s.ID] = &s
-		dao.ServerLock.Unlock()
+		singleton.ServerLock.Lock()
+		singleton.SecretToID[s.Secret] = s.ID
+		singleton.ServerList[s.ID] = &s
+		singleton.ServerLock.Unlock()
 	}
-	dao.ReSortServer()
+	singleton.ReSortServer()
 	c.JSON(http.StatusOK, model.Response{
 		Code: http.StatusOK,
 	})
 }
 
 type monitorForm struct {
-	ID     uint64
-	Name   string
-	Target string
-	Type   uint8
+	ID             uint64
+	Name           string
+	Target         string
+	Type           uint8
+	Cover          uint8
+	Notify         string
+	SkipServersRaw string
+	Duration       uint64
 }
 
 func (ma *memberAPI) addOrEditMonitor(c *gin.Context) {
@@ -202,16 +227,24 @@ func (ma *memberAPI) addOrEditMonitor(c *gin.Context) {
 	err := c.ShouldBindJSON(&mf)
 	if err == nil {
 		m.Name = mf.Name
-		m.Target = mf.Target
+		m.Target = strings.TrimSpace(mf.Target)
 		m.Type = mf.Type
 		m.ID = mf.ID
+		m.SkipServersRaw = mf.SkipServersRaw
+		m.Cover = mf.Cover
+		m.Notify = mf.Notify == "on"
+		m.Duration = mf.Duration
+		err = m.InitSkipServers()
 	}
 	if err == nil {
 		if m.ID == 0 {
-			err = dao.DB.Create(&m).Error
+			err = singleton.DB.Create(&m).Error
 		} else {
-			err = dao.DB.Save(&m).Error
+			err = singleton.DB.Save(&m).Error
 		}
+	}
+	if err == nil {
+		err = singleton.ServiceSentinelShared.OnMonitorUpdate(m)
 	}
 	if err != nil {
 		c.JSON(http.StatusOK, model.Response{
@@ -231,6 +264,7 @@ type cronForm struct {
 	Scheduler      string
 	Command        string
 	ServersRaw     string
+	Cover          uint8
 	PushSuccessful string
 }
 
@@ -245,19 +279,25 @@ func (ma *memberAPI) addOrEditCron(c *gin.Context) {
 		cr.ServersRaw = cf.ServersRaw
 		cr.PushSuccessful = cf.PushSuccessful == "on"
 		cr.ID = cf.ID
-		err = json.Unmarshal([]byte(cf.ServersRaw), &cr.Servers)
+		cr.Cover = cf.Cover
+		err = utils.Json.Unmarshal([]byte(cf.ServersRaw), &cr.Servers)
 	}
-	if err == nil {
-		_, err = cron.ParseStandard(cr.Scheduler)
-	}
+	tx := singleton.DB.Begin()
 	if err == nil {
 		if cf.ID == 0 {
-			err = dao.DB.Create(&cr).Error
+			err = tx.Create(&cr).Error
 		} else {
-			err = dao.DB.Save(&cr).Error
+			err = tx.Save(&cr).Error
 		}
 	}
-
+	if err == nil {
+		cr.CronJobID, err = singleton.Cron.AddFunc(cr.Scheduler, singleton.CronTrigger(cr))
+	}
+	if err == nil {
+		err = tx.Commit().Error
+	} else {
+		tx.Rollback()
+	}
 	if err != nil {
 		c.JSON(http.StatusOK, model.Response{
 			Code:    http.StatusBadRequest,
@@ -266,31 +306,15 @@ func (ma *memberAPI) addOrEditCron(c *gin.Context) {
 		return
 	}
 
-	dao.CronLock.Lock()
-	defer dao.CronLock.Unlock()
-	crOld := dao.Crons[cr.ID]
-	if crOld != nil && crOld.CronID != 0 {
-		dao.Cron.Remove(crOld.CronID)
+	singleton.CronLock.Lock()
+	defer singleton.CronLock.Unlock()
+	crOld := singleton.Crons[cr.ID]
+	if crOld != nil && crOld.CronJobID != 0 {
+		singleton.Cron.Remove(crOld.CronJobID)
 	}
 
-	cr.CronID, err = dao.Cron.AddFunc(cr.Scheduler, func() {
-		dao.ServerLock.RLock()
-		defer dao.ServerLock.RUnlock()
-		for j := 0; j < len(cr.Servers); j++ {
-			if dao.ServerList[cr.Servers[j]].TaskStream != nil {
-				dao.ServerList[cr.Servers[j]].TaskStream.Send(&pb.Task{
-					Id:   cr.ID,
-					Data: cr.Command,
-					Type: model.TaskTypeCommand,
-				})
-			} else {
-				dao.SendNotification(fmt.Sprintf("计划任务：%s，服务器：%d 离线，无法执行。", cr.Name, cr.Servers[j]), false)
-			}
-		}
-	})
-
-	delete(dao.Crons, cr.ID)
-	dao.Crons[cr.ID] = &cr
+	delete(singleton.Crons, cr.ID)
+	singleton.Crons[cr.ID] = &cr
 
 	c.JSON(http.StatusOK, model.Response{
 		Code: http.StatusOK,
@@ -299,7 +323,7 @@ func (ma *memberAPI) addOrEditCron(c *gin.Context) {
 
 func (ma *memberAPI) manualTrigger(c *gin.Context) {
 	var cr model.Cron
-	if err := dao.DB.First(&cr, "id = ?", c.Param("id")).Error; err != nil {
+	if err := singleton.DB.First(&cr, "id = ?", c.Param("id")).Error; err != nil {
 		c.JSON(http.StatusOK, model.Response{
 			Code:    http.StatusBadRequest,
 			Message: err.Error(),
@@ -307,10 +331,45 @@ func (ma *memberAPI) manualTrigger(c *gin.Context) {
 		return
 	}
 
-	dao.CronTrigger(&cr)
+	singleton.ManualTrigger(cr)
 
 	c.JSON(http.StatusOK, model.Response{
 		Code: http.StatusOK,
+	})
+}
+
+func (ma *memberAPI) forceUpdate(c *gin.Context) {
+	var forceUpdateServers []uint64
+	if err := c.ShouldBindJSON(&forceUpdateServers); err != nil {
+		c.JSON(http.StatusOK, model.Response{
+			Code:    http.StatusBadRequest,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	var executeResult bytes.Buffer
+
+	for i := 0; i < len(forceUpdateServers); i++ {
+		singleton.ServerLock.RLock()
+		server := singleton.ServerList[forceUpdateServers[i]]
+		singleton.ServerLock.RUnlock()
+		if server != nil && server.TaskStream != nil {
+			if err := server.TaskStream.Send(&proto.Task{
+				Type: model.TaskTypeUpgrade,
+			}); err != nil {
+				executeResult.WriteString(fmt.Sprintf("%d 下发指令失败 %+v<br/>", forceUpdateServers[i], err))
+			} else {
+				executeResult.WriteString(fmt.Sprintf("%d 下发指令成功<br/>", forceUpdateServers[i]))
+			}
+		} else {
+			executeResult.WriteString(fmt.Sprintf("%d 离线<br/>", forceUpdateServers[i]))
+		}
+	}
+
+	c.JSON(http.StatusOK, model.Response{
+		Code:    http.StatusOK,
+		Message: executeResult.String(),
 	})
 }
 
@@ -320,6 +379,7 @@ type notificationForm struct {
 	URL           string
 	RequestMethod int
 	RequestType   int
+	RequestHeader string
 	RequestBody   string
 	VerifySSL     string
 }
@@ -332,6 +392,7 @@ func (ma *memberAPI) addOrEditNotification(c *gin.Context) {
 		n.Name = nf.Name
 		n.RequestMethod = nf.RequestMethod
 		n.RequestType = nf.RequestType
+		n.RequestHeader = nf.RequestHeader
 		n.RequestBody = nf.RequestBody
 		n.URL = nf.URL
 		verifySSL := nf.VerifySSL == "on"
@@ -341,9 +402,9 @@ func (ma *memberAPI) addOrEditNotification(c *gin.Context) {
 	}
 	if err == nil {
 		if n.ID == 0 {
-			err = dao.DB.Create(&n).Error
+			err = singleton.DB.Create(&n).Error
 		} else {
-			err = dao.DB.Save(&n).Error
+			err = singleton.DB.Save(&n).Error
 		}
 	}
 	if err != nil {
@@ -353,7 +414,7 @@ func (ma *memberAPI) addOrEditNotification(c *gin.Context) {
 		})
 		return
 	}
-	dao.OnRefreshOrAddNotification(n)
+	singleton.OnRefreshOrAddNotification(n)
 	c.JSON(http.StatusOK, model.Response{
 		Code: http.StatusOK,
 	})
@@ -371,16 +432,31 @@ func (ma *memberAPI) addOrEditAlertRule(c *gin.Context) {
 	var r model.AlertRule
 	err := c.ShouldBindJSON(&arf)
 	if err == nil {
-		err = json.Unmarshal([]byte(arf.RulesRaw), &r.Rules)
+		err = utils.Json.Unmarshal([]byte(arf.RulesRaw), &r.Rules)
 	}
 	if err == nil {
 		if len(r.Rules) == 0 {
 			err = errors.New("至少定义一条规则")
 		} else {
 			for i := 0; i < len(r.Rules); i++ {
-				if r.Rules[i].Duration < 3 {
-					err = errors.New("Duration 至少为 3")
-					break
+				if !r.Rules[i].IsTransferDurationRule() {
+					if r.Rules[i].Duration < 3 {
+						err = errors.New("错误：Duration 至少为 3")
+						break
+					}
+				} else {
+					if r.Rules[i].CycleInterval < 1 {
+						err = errors.New("错误: cycle_interval 至少为 1")
+						break
+					}
+					if r.Rules[i].CycleStart == nil {
+						err = errors.New("错误: cycle_start 未设置")
+						break
+					}
+					if r.Rules[i].CycleStart.After(time.Now()) {
+						err = errors.New("错误: cycle_start 是个未来值")
+						break
+					}
 				}
 			}
 		}
@@ -392,9 +468,9 @@ func (ma *memberAPI) addOrEditAlertRule(c *gin.Context) {
 		r.Enable = &enable
 		r.ID = arf.ID
 		if r.ID == 0 {
-			err = dao.DB.Create(&r).Error
+			err = singleton.DB.Create(&r).Error
 		} else {
-			err = dao.DB.Save(&r).Error
+			err = singleton.DB.Save(&r).Error
 		}
 	}
 	if err != nil {
@@ -404,7 +480,7 @@ func (ma *memberAPI) addOrEditAlertRule(c *gin.Context) {
 		})
 		return
 	}
-	dao.OnRefreshOrAddAlert(r)
+	singleton.OnRefreshOrAddAlert(r)
 	c.JSON(http.StatusOK, model.Response{
 		Code: http.StatusOK,
 	})
@@ -431,7 +507,7 @@ func (ma *memberAPI) logout(c *gin.Context) {
 		})
 		return
 	}
-	dao.DB.Model(admin).UpdateColumns(model.User{
+	singleton.DB.Model(admin).UpdateColumns(model.User{
 		Token:        "",
 		TokenExpired: time.Now(),
 	})
@@ -441,13 +517,17 @@ func (ma *memberAPI) logout(c *gin.Context) {
 }
 
 type settingForm struct {
-	Title                      string
-	Admin                      string
-	Theme                      string
-	CustomCode                 string
-	ViewPassword               string
-	EnableIPChangeNotification string
-	Oauth2Type                 string
+	Title                 string
+	Admin                 string
+	Theme                 string
+	CustomCode            string
+	ViewPassword          string
+	IgnoredIPNotification string
+	GRPCHost              string
+	Cover                 uint8
+
+	EnableIPChangeNotification  string
+	EnablePlainIPInNotification string
 }
 
 func (ma *memberAPI) updateSetting(c *gin.Context) {
@@ -459,14 +539,17 @@ func (ma *memberAPI) updateSetting(c *gin.Context) {
 		})
 		return
 	}
-	dao.Conf.EnableIPChangeNotification = sf.EnableIPChangeNotification == "on"
-	dao.Conf.Site.Brand = sf.Title
-	dao.Conf.Site.Theme = sf.Theme
-	dao.Conf.Site.CustomCode = sf.CustomCode
-	dao.Conf.Site.ViewPassword = sf.ViewPassword
-	dao.Conf.Oauth2.Type = sf.Oauth2Type
-	dao.Conf.Oauth2.Admin = sf.Admin
-	if err := dao.Conf.Save(); err != nil {
+	singleton.Conf.EnableIPChangeNotification = sf.EnableIPChangeNotification == "on"
+	singleton.Conf.EnablePlainIPInNotification = sf.EnablePlainIPInNotification == "on"
+	singleton.Conf.Cover = sf.Cover
+	singleton.Conf.GRPCHost = sf.GRPCHost
+	singleton.Conf.IgnoredIPNotification = sf.IgnoredIPNotification
+	singleton.Conf.Site.Brand = sf.Title
+	singleton.Conf.Site.Theme = sf.Theme
+	singleton.Conf.Site.CustomCode = sf.CustomCode
+	singleton.Conf.Site.ViewPassword = sf.ViewPassword
+	singleton.Conf.Oauth2.Admin = sf.Admin
+	if err := singleton.Conf.Save(); err != nil {
 		c.JSON(http.StatusOK, model.Response{
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("请求错误：%s", err),

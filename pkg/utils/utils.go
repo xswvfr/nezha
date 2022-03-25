@@ -1,13 +1,18 @@
 package utils
 
 import (
-	"crypto/md5"
+	"crypto/md5" // #nosec
 	"encoding/hex"
 	"math/rand"
 	"os"
+	"regexp"
 	"time"
 	"unsafe"
+
+	jsoniter "github.com/json-iterator/go"
 )
+
+var Json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const (
@@ -33,15 +38,33 @@ func RandStringBytesMaskImprSrcUnsafe(n int) string {
 		remain--
 	}
 
-	return *(*string)(unsafe.Pointer(&b))
+	return *(*string)(unsafe.Pointer(&b)) //#nosec
 }
 
 func MD5(plantext string) string {
-	hash := md5.New()
+	hash := md5.New() // #nosec
 	hash.Write([]byte(plantext))
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
 func IsWindows() bool {
 	return os.PathSeparator == '\\' && os.PathListSeparator == ';'
+}
+
+var ipv4Re = regexp.MustCompile(`(\d*\.).*(\.\d*)`)
+
+func ipv4Desensitize(ipv4Addr string) string {
+	return ipv4Re.ReplaceAllString(ipv4Addr, "$1****$2")
+}
+
+var ipv6Re = regexp.MustCompile(`(\w*:\w*:).*(:\w*:\w*)`)
+
+func ipv6Desensitize(ipv6Addr string) string {
+	return ipv6Re.ReplaceAllString(ipv6Addr, "$1****$2")
+}
+
+func IPDesensitize(ipAddr string) string {
+	ipAddr = ipv4Desensitize(ipAddr)
+	ipAddr = ipv6Desensitize(ipAddr)
+	return ipAddr
 }

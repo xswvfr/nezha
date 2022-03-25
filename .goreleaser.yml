@@ -2,9 +2,10 @@ before:
   hooks:
     - go mod tidy -v
 builds:
-  - id: nezha-agent
-    env:
+  - env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.arch={{.Arch}}
     goos:
       - linux
       - windows
@@ -15,20 +16,36 @@ builds:
       - 386
       - amd64
       - mips
-      - mips64
+      - mipsle
+      - s390x
+      - riscv64
     gomips:
       - softfloat
+    ignore:
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
     main: ./cmd/agent
     binary: nezha-agent
+universal_binaries:
+  - name_template: "nezha-agent"
+    replace: false
 checksum:
   name_template: "checksums.txt"
 snapshot:
-  name_template: "{{.ProjectName}}"
+  name_template: "nezha-agent"
 archives:
   - name_template: "nezha-agent_{{ .Os }}_{{ .Arch }}"
+    files:
+      - none*
 changelog:
   sort: asc
   filters:
     exclude:
       - "^docs:"
       - "^test:"
+      - "^chore"
+      - Merge pull request
+      - Merge branch
+      - go mod tidy

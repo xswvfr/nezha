@@ -3,12 +3,11 @@ package rpc
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/naiba/nezha/model"
 	pb "github.com/naiba/nezha/proto"
-	"github.com/naiba/nezha/service/dao"
+	"github.com/naiba/nezha/service/singleton"
 )
 
 type NezhaHandler struct {
@@ -21,71 +20,30 @@ func (s *NezhaHandler) ReportTask(c context.Context, r *pb.TaskResult) (*pb.Rece
 	if clientID, err = s.Auth.Check(c); err != nil {
 		return nil, err
 	}
-	if r.GetType() == model.TaskTypeHTTPGET {
-		// SSL 证书报警
-		var errMsg string
-		if strings.HasPrefix(r.GetData(), "SSL证书错误：") {
-			// 排除 i/o timeont、connection timeout、EOF 错误
-			if !strings.HasSuffix(r.GetData(), "timeout") &&
-				r.GetData() != "EOF" &&
-				!strings.HasSuffix(r.GetData(), "timed out") {
-				errMsg = r.GetData()
-			}
-		} else {
-			var last model.MonitorHistory
-			var newCert = strings.Split(r.GetData(), "|")
-			if len(newCert) > 1 {
-				expiresNew, _ := time.Parse("2006-01-02 15:04:05 -0700 MST", newCert[1])
-				// 证书过期提醒
-				if expiresNew.Before(time.Now().AddDate(0, 0, 7)) {
-					errMsg = fmt.Sprintf(
-						"SSL证书将在七天内过期，过期时间：%s。",
-						expiresNew.Format("2006-01-02 15:04:05"))
-				}
-				// 证书变更提醒
-				if err := dao.DB.Where("monitor_id = ? AND data LIKE ?", r.GetId(), "%|%").Order("id DESC").First(&last).Error; err == nil {
-					var oldCert = strings.Split(last.Data, "|")
-					var expiresOld time.Time
-					if len(oldCert) > 1 {
-						expiresOld, _ = time.Parse("2006-01-02 15:04:05 -0700 MST", oldCert[1])
-					}
-					if last.Data != "" && oldCert[0] != newCert[0] && !expiresNew.Equal(expiresOld) {
-						errMsg = fmt.Sprintf(
-							"SSL证书变更，旧：%s, %s 过期；新：%s, %s 过期。",
-							oldCert[0], expiresOld.Format("2006-01-02 15:04:05"), newCert[0], expiresNew.Format("2006-01-02 15:04:05"))
-					}
-				}
-			}
-		}
-		if errMsg != "" {
-			var monitor model.Monitor
-			dao.DB.First(&monitor, "id = ?", r.GetId())
-			dao.SendNotification(fmt.Sprintf("服务监控：%s %s", monitor.Name, errMsg), true)
-		}
-	}
 	if r.GetType() == model.TaskTypeCommand {
 		// 处理上报的计划任务
-		dao.CronLock.RLock()
-		defer dao.CronLock.RUnlock()
-		cr := dao.Crons[r.GetId()]
+		singleton.CronLock.RLock()
+		defer singleton.CronLock.RUnlock()
+		cr := singleton.Crons[r.GetId()]
 		if cr != nil {
+			singleton.ServerLock.RLock()
+			defer singleton.ServerLock.RUnlock()
 			if cr.PushSuccessful && r.GetSuccessful() {
-				dao.SendNotification(fmt.Sprintf("成功计划任务：%s ，服务器：%d，日志：\n%s", cr.Name, clientID, r.GetData()), false)
+				singleton.SendNotification(fmt.Sprintf("[任务成功] %s ，服务器：%s，日志：\n%s", cr.Name, singleton.ServerList[clientID].Name, r.GetData()), false)
 			}
 			if !r.GetSuccessful() {
-				dao.SendNotification(fmt.Sprintf("失败计划任务：%s ，服务器：%d，日志：\n%s", cr.Name, clientID, r.GetData()), false)
+				singleton.SendNotification(fmt.Sprintf("[任务失败] %s ，服务器：%s，日志：\n%s", cr.Name, singleton.ServerList[clientID].Name, r.GetData()), false)
 			}
-			dao.DB.Model(cr).Updates(model.Cron{
+			singleton.DB.Model(cr).Updates(model.Cron{
 				LastExecutedAt: time.Now().Add(time.Second * -1 * time.Duration(r.GetDelay())),
 				LastResult:     r.GetSuccessful(),
 			})
 		}
-	} else {
-		// 存入历史记录
-		mh := model.PB2MonitorHistory(r)
-		if err := dao.DB.Create(&mh).Error; err != nil {
-			return nil, err
-		}
+	} else if model.IsServiceSentinelNeeded(r.GetType()) {
+		singleton.ServiceSentinelShared.Dispatch(singleton.ReportData{
+			Data:     r,
+			Reporter: clientID,
+		})
 	}
 	return &pb.Receipt{Proced: true}, nil
 }
@@ -97,14 +55,15 @@ func (s *NezhaHandler) RequestTask(h *pb.Host, stream pb.NezhaService_RequestTas
 		return err
 	}
 	closeCh := make(chan error)
-	dao.ServerLock.RLock()
-	dao.ServerList[clientID].TaskStream = stream
-	dao.ServerList[clientID].TaskClose = closeCh
-	dao.ServerLock.RUnlock()
-	select {
-	case err = <-closeCh:
-		return err
+	singleton.ServerLock.RLock()
+	// 修复不断的请求 task 但是没有 return 导致内存泄漏
+	if singleton.ServerList[clientID].TaskClose != nil {
+		close(singleton.ServerList[clientID].TaskClose)
 	}
+	singleton.ServerList[clientID].TaskStream = stream
+	singleton.ServerList[clientID].TaskClose = closeCh
+	singleton.ServerLock.RUnlock()
+	return <-closeCh
 }
 
 func (s *NezhaHandler) ReportSystemState(c context.Context, r *pb.State) (*pb.Receipt, error) {
@@ -114,10 +73,17 @@ func (s *NezhaHandler) ReportSystemState(c context.Context, r *pb.State) (*pb.Re
 		return nil, err
 	}
 	state := model.PB2State(r)
-	dao.ServerLock.RLock()
-	defer dao.ServerLock.RUnlock()
-	dao.ServerList[clientID].LastActive = time.Now()
-	dao.ServerList[clientID].State = &state
+	singleton.ServerLock.RLock()
+	defer singleton.ServerLock.RUnlock()
+	singleton.ServerList[clientID].LastActive = time.Now()
+	singleton.ServerList[clientID].State = &state
+
+	// 如果从未记录过，先打点，等到小时时间点时入库
+	if singleton.ServerList[clientID].PrevHourlyTransferIn == 0 || singleton.ServerList[clientID].PrevHourlyTransferOut == 0 {
+		singleton.ServerList[clientID].PrevHourlyTransferIn = int64(state.NetInTransfer)
+		singleton.ServerList[clientID].PrevHourlyTransferOut = int64(state.NetOutTransfer)
+	}
+
 	return &pb.Receipt{Proced: true}, nil
 }
 
@@ -128,17 +94,26 @@ func (s *NezhaHandler) ReportSystemInfo(c context.Context, r *pb.Host) (*pb.Rece
 		return nil, err
 	}
 	host := model.PB2Host(r)
-	dao.ServerLock.RLock()
-	defer dao.ServerLock.RUnlock()
-	if dao.Conf.EnableIPChangeNotification &&
-		dao.ServerList[clientID].Host != nil &&
-		dao.ServerList[clientID].Host.IP != "" &&
+	singleton.ServerLock.RLock()
+	defer singleton.ServerLock.RUnlock()
+	if singleton.Conf.EnableIPChangeNotification &&
+		((singleton.Conf.Cover == model.ConfigCoverAll && !singleton.Conf.IgnoredIPNotificationServerIDs[clientID]) ||
+			(singleton.Conf.Cover == model.ConfigCoverIgnoreAll && singleton.Conf.IgnoredIPNotificationServerIDs[clientID])) &&
+		singleton.ServerList[clientID].Host != nil &&
+		singleton.ServerList[clientID].Host.IP != "" &&
 		host.IP != "" &&
-		dao.ServerList[clientID].Host.IP != host.IP {
-		dao.SendNotification(fmt.Sprintf(
-			"IP变更提醒 服务器：%s ，旧IP：%s，新IP：%s。",
-			dao.ServerList[clientID].Name, dao.ServerList[clientID].Host.IP, host.IP), true)
+		singleton.ServerList[clientID].Host.IP != host.IP {
+		singleton.SendNotification(fmt.Sprintf(
+			"[IP变更] %s ，旧IP：%s，新IP：%s。",
+			singleton.ServerList[clientID].Name, singleton.IPDesensitize(singleton.ServerList[clientID].Host.IP), singleton.IPDesensitize(host.IP)), true)
 	}
-	dao.ServerList[clientID].Host = &host
+
+	// 判断是否是机器重启，如果是机器重启要录入最后记录的流量里面
+	if singleton.ServerList[clientID].Host.BootTime < host.BootTime {
+		singleton.ServerList[clientID].PrevHourlyTransferIn = singleton.ServerList[clientID].PrevHourlyTransferIn - int64(singleton.ServerList[clientID].State.NetInTransfer)
+		singleton.ServerList[clientID].PrevHourlyTransferOut = singleton.ServerList[clientID].PrevHourlyTransferOut - int64(singleton.ServerList[clientID].State.NetOutTransfer)
+	}
+
+	singleton.ServerList[clientID].Host = &host
 	return &pb.Receipt{Proced: true}, nil
 }

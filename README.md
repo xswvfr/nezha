@@ -1,39 +1,60 @@
-<div align="center" style="background-color: white">
-  <img width="500" style="max-width:100%" src="https://raw.githubusercontent.com/naiba/nezha/master/resource/static/brand.png" title="哪吒监控">
-  <br><br>
-<img src="https://img.shields.io/github/workflow/status/naiba/nezha/Dashboard%20image?label=Dash%20v0.4.14&logo=github&style=for-the-badge">&nbsp;<img src="https://img.shields.io/github/v/release/naiba/nezha?color=brightgreen&label=Agent&style=for-the-badge&logo=github">&nbsp;<img src="https://img.shields.io/github/workflow/status/naiba/nezha/Agent%20release?label=Agent%20CI&logo=github&style=for-the-badge">&nbsp;<img src="https://img.shields.io/badge/Installer-v0.4.9-brightgreen?style=for-the-badge&logo=linux">
+<div align="center">
   <br>
-  <p>:trollface: 哪吒监控 一站式轻监控轻运维系统。支持系统状态、HTTP(SSL 证书变更、即将到期、到期)、TCP、Ping 监控报警，命令批量执行和计划任务。</p>	
+  <img width="250" style="max-width:80%" src="resource/static/brand.svg" title="哪吒监控">
+  <br>
+  <small><i>LOGO designed by <a href="https://xio.ng" target="_blank">熊大</a> .</i></small>
+  <br><br>
+<img src="https://img.shields.io/github/workflow/status/naiba/nezha/Dashboard%20image?label=Dash%20v0.12.17&logo=github&style=for-the-badge">&nbsp;<img src="https://img.shields.io/github/v/release/naiba/nezha?color=brightgreen&label=Agent&style=for-the-badge&logo=github">&nbsp;<img src="https://img.shields.io/github/workflow/status/naiba/nezha/Agent%20release?label=Agent%20CI&logo=github&style=for-the-badge">&nbsp;<img src="https://img.shields.io/badge/Installer-v0.8.1-brightgreen?style=for-the-badge&logo=linux">
+  <br>
+  <br>
+  <p>:trollface: <b>哪吒监控</b> 一站式轻监控轻运维系统。支持系统状态、HTTP(SSL 证书变更、即将到期、到期)、TCP、Ping 监控报警，计划任务和在线终端。</p>
 </div>
 
-\>> QQ 交流群： ~~955957790~~ 各式心态的人都有，解散了省心，**自2021年3月26起不再提供任何支持，接受PR，但不再更新。**
+\>> QQ 交流群：872069346 **加群要求：已搭建好哪吒监控 & 有 2+ 服务器， 机器人自动审核**
 
-\>> [我们的用户](https://www.google.com/search?q="powered+by+哪吒监控%7C哪吒面板"&filter=0) (Google)
+\>> [我们的用户](https://www.google.com/search?q="powered+by+哪吒监控"&filter=0) (Google)
 
-| 默认主题                                                | DayNight [@JackieSung](https://github.com/JackieSung4ev) | hotaru                                                                 |
-| ------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------- |
-| ![首页截图1](https://s3.ax1x.com/2020/12/07/DvTCwD.jpg) | <img src="https://s3.ax1x.com/2021/01/20/sfJv2q.jpg"/>   | <img src="https://s3.ax1x.com/2020/12/09/rPF4xJ.png" width="1600px" /> |
+| 默认主题                                                                                 | DayNight [@JackieSung](https://github.com/JackieSung4ev)                                               | hotaru                                                                     |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| ![默认主题](resource/template/theme-default/screenshot.png)                              | <img src="resource/template/theme-daynight/screenshot.png" width="3000px"/>                            | <img src="resource/template/theme-hotaru/screenshot.png" width="1500px" /> |
+| <div align="center"><b>默认主题魔改 <a href="https://ii.do/43.html">[教程]</a></b></div> | <div align="center"><b>Neko Mdui <a href="https://github.com/MikoyChinese">@MikoyChinese</a></b></div> |                                                                            |
+| ![默认主题魔改](https://cdn.jsdelivr.net/gh/idarku/img@main/me/1631120192341.webp)       | ![Neko Mdui](resource/template/theme-mdui/screenshot.png)                                              |                                                                            |
 
 ## 安装脚本
 
-**推荐配置：** 安装前解析 _两个域名_ 到面板服务器，一个作为 _公开访问_ ，可以 **接入 CDN**，比如 (status.nai.ba)；另外一个作为安装 Agent 时连接 Dashboard 使用，**不能接入 CDN** 直接暴露面板主机 IP，比如（randomdashboard.nai.ba）。
+**推荐配置：** 安装前准备 _两个域名_，一个可以 **接入 CDN** 作为 _公开访问_，比如 (status.nai.ba)；另外一个解析到面板服务器作为 Agent 连接 Dashboard 使用，**不能接入 CDN** 直接暴露面板主机 IP，比如（ip-to-dashboard.nai.ba）。
 
 ```shell
-curl -L https://raw.githubusercontent.com/naiba/nezha/master/script/install.sh -o nezha.sh && chmod +x nezha.sh
-./nezha.sh
+curl -L https://raw.githubusercontent.com/naiba/nezha/master/script/install.sh  -o nezha.sh && chmod +x nezha.sh
+sudo ./nezha.sh
 ```
 
-<details>
-    <summary>国内镜像加速：（有缓存，版本更新不及时，能不用尽量不用，非作者维护）</summary>
+国内镜像加速：
 
 ```shell
-curl -L https://raw.sevencdn.com/naiba/nezha/master/script/install.sh -o nezha.sh && chmod +x nezha.sh
-CN=true ./nezha.sh
+curl -L https://cdn.jsdelivr.net/gh/naiba/nezha@master/script/install.sh -o nezha.sh && chmod +x nezha.sh
+CN=true sudo ./nezha.sh
 ```
-
-</details>
 
 _\* 使用 WatchTower 可以自动更新面板，Windows 终端可以使用 nssm 配置自启动（见尾部教程）_
+
+### Agent 自定义
+
+#### 自定义监控的网卡和硬盘分区
+
+执行 `/opt/nezha/agent/nezha-agent --edit-agent-config` 来选择自定义的网卡和分区，然后重启 Agent 即可
+
+#### 运行参数
+
+通过执行 `./nezha-agent --help` 查看支持的参数，如果你使用一键脚本，可以编辑 `/etc/systemd/system/nezha-agent.service`，在 `ExecStart=` 这一行的末尾加上
+
+- `--report-delay` 系统信息上报的间隔，默认为 1 秒，可以设置为 3 来进一步降低 agent 端系统资源占用（配置区间 1-4）
+- `--skip-conn` 不监控连接数，机场/连接密集型机器推荐设置，不然比较占 CPU([shirou/gopsutil/issues#220](https://github.com/shirou/gopsutil/issues/220))
+- `--skip-procs` 不监控进程数，也可以降低 agent 占用
+- `--disable-auto-update` 禁止 **自动更新** Agent（安全特性）
+- `--disable-force-update` 禁止 **强制更新** Agent（安全特性）
+- `--disable-command-execute` 禁止在 Agent 机器上执行定时任务、打开在线终端（安全特性）
+- `--tls` 启用 SSL/TLS 加密（使用 nginx 反向代理 Agent 的 grpc 连接，并且 nginx 开启 SSL/TLS 时，需要启用该项配置）
 
 ## 功能说明
 
@@ -45,7 +66,7 @@ _\* 使用 WatchTower 可以自动更新面板，Windows 终端可以使用 nssm
 </details>
 
 <details>
-    <summary>报警通知：CPU、内存、硬盘、带宽、流量实时监控。</summary>
+    <summary>报警通知：负载、CPU、内存、硬盘、带宽、流量、月流量、进程数、连接数实时监控。</summary>
 
 #### 灵活通知方式
 
@@ -60,22 +81,25 @@ URL 里面也可放置占位符，请求时会进行简单的字符串替换。
 1. 添加通知方式
 
    - server 酱示例
+
      - 名称：server 酱
-     - URL：https://sc.ftqq.com/SCUrandomkeys.send?text=#NEZHA#
+     - URL：<https://sc.ftqq.com/SCUrandomkeys.send?text=#NEZHA>#
      - 请求方式: GET
      - 请求类型: 默认
      - Body: 空
+
    - wxpusher 示例，需要关注你的应用
 
      - 名称: wxpusher
-     - URL：http://wxpusher.zjiecode.com/api/send/message
+     - URL：<http://wxpusher.zjiecode.com/api/send/message>
      - 请求方式: POST
      - 请求类型: JSON
      - Body: `{"appToken":"你的appToken","topicIds":[],"content":"#NEZHA#","contentType":"1","uids":["你的uid"]}`
 
    - telegram 示例 [@haitau](https://github.com/haitau) 贡献
+
      - 名称：telegram 机器人消息通知
-     - URL：https://api.telegram.org/botXXXXXX/sendMessage?chat_id=YYYYYY&text=#NEZHA#
+     - URL：<https://api.telegram.org/botXXXXXX/sendMessage?chat_id=YYYYYY&text=#NEZHA>#
      - 请求方式: GET
      - 请求类型: 默认
      - Body: 空
@@ -95,12 +119,40 @@ URL 里面也可放置占位符，请求时会进行简单的字符串替换。
 
 #### 报警规则说明
 
-- Type
-  - cpu、memory、swap、disk：Min/Max 数值为占用百分比
-  - net_in_speed(入站网速)、net_out_speed(出站网速)、net_all_speed(双向网速)、transfer_in(入站流量)、transfer_out(出站流量)、transfer_all(双向流量)：Min/Max 数值为字节（1kb=1024，1mb = 1024\*1024）
-  - offline：不支持 Min/Max 参数
-- Duration：持续秒数，监控比较简陋，取持续时间内的 70% 采样结果
-- Ignore: `{"1": true, "2":false}` 忽略此规则的服务器 ID 列表
+##### 基本规则
+
+- type
+  - `cpu`、`memory`、`swap`、`disk`
+  - `net_in_speed` 入站网速、`net_out_speed` 出站网速、`net_all_speed` 双向网速、`transfer_in` 入站流量、`transfer_out` 出站流量、`transfer_all` 双向流量
+  - `offline` 离线监控
+  - `load1`、`load5`、`load15` 负载
+  - `process_count` 进程数 _目前取线程数占用资源太多，暂时不支持_
+  - `tcp_conn_count`、`udp_conn_count` 连接数
+- duration：持续秒数，秒数内采样记录 30% 以上触发阈值才会报警（防数据插针）
+- min/max
+  - 流量、网速类数值 为字节（1KB=1024B，1MB = 1024\*1024B）
+  - 内存、硬盘、CPU 为占用百分比
+  - 离线监控无需设置
+- cover `[{"type":"offline","duration":10, "cover":0, "ignore":{"5": true}}]`
+  - `0` 监控所有，通过 `ignore` 忽略特定服务器
+  - `1` 忽略所有，通过 `ignore` 监控特定服务器
+- ignore: `{"1": true, "2":false}` 特定服务器，搭配 `cover` 使用
+
+##### 特殊：任意周期流量报警
+
+可以用作月流量报警
+
+- type
+  - transfer_in_cycle 周期内的入站流量
+  - transfer_out_cycle 周期内的出站流量
+  - transfer_all_cycle 周期内双向流量和
+- cycle_start 统计周期开始日期（可以是你机器计费周期的开始日期），RFC3339 时间格式，例如北京时间为`2022-01-11T08:00:00.00+08:00`
+- cycle_interval 每隔多少个周期单位（例如，周期单位为天，该值为 7，则代表每隔 7 天统计一次）
+- cycle_unit 统计周期单位，默认`hour`,可选(`hour`, `day`, `week`, `month`, `year`)
+- min/max、cover、ignore 参考基本规则配置
+- 示例: ID 为 3 的机器（ignore 里面定义）的每月 15 号计费的出站月流量 1T 报警 `[{"type":"transfer_out_cycle","max":1000000000000,"cycle_start":"2022-01-11T08:00:00.00+08:00","cycle_interval":1,"cycle_unit":"month","cover":1,"ignore":{"3":true}}]`
+  ![7QKaUx.md.png](https://s4.ax1x.com/2022/01/13/7QKaUx.md.png)
+
 </details>
 
 <details>
@@ -115,7 +167,7 @@ URL 里面也可放置占位符，请求时会进行简单的字符串替换。
 
 - 默认主题更改进度条颜色示例
 
-  ```
+  ```html
   <style>
   .ui.fine.progress> .bar {
       background-color: pink !important;
@@ -123,9 +175,26 @@ URL 里面也可放置占位符，请求时会进行简单的字符串替换。
   </style>
   ```
 
-- 默认主题修改 LOGO、移除版权示例（来自 [@iLay1678](https://github.com/iLay1678)，欢迎 PR）
+- DayNight 主题更改进度条颜色、修改页脚示例（来自 [@hyt-allen-xu](https://github.com/hyt-allen-xu)）
 
+  ```html
+  <style>
+  .ui.fine.progress> .progress-bar {
+    background-color: #00a7d0 !important;
+  }
+  </style>
+  <script>
+  window.onload = function(){
+  var footer=document.querySelector("div.footer-container")
+  footer.innerHTML="©2021 你的名字 & Powered by 你的名字"
+  footer.style.visibility="visible"
+  }
+  </script>
   ```
+
+- 默认主题修改 LOGO、修改页脚示例（来自 [@iLay1678](https://github.com/iLay1678)）
+
+  ```html
   <style>
   .right.menu>a{
   visibility: hidden;
@@ -151,13 +220,13 @@ URL 里面也可放置占位符，请求时会进行简单的字符串替换。
 
 - hotaru 主题更改背景图片示例
 
-      ```
-      <style>
-      .hotaru-cover {
-          background: url(https://s3.ax1x.com/2020/12/08/DzHv6A.jpg) center;
-      }
-      </style>
-      ```
+  ```html
+  <style>
+  .hotaru-cover {
+     background: url(https://s3.ax1x.com/2020/12/08/DzHv6A.jpg) center;
+  }
+  </style>
+  ```
 
 </details>
 
@@ -166,26 +235,44 @@ URL 里面也可放置占位符，请求时会进行简单的字符串替换。
 <details>
     <summary>如何进行数据迁移、备份恢复？</summary>
 
-数据储存在 `/opt/nezha` 文件夹中，迁移数据时打包这个文件夹，到新环境解压。然后执行一键脚本安装即可
+1. 先使用一键脚本 `停止面板`
+2. 打包 `/opt/nezha` 文件夹，到新环境相同位置
+3. 使用一键脚本 `启动面板`
 
 </details>
 
 <details>
-    <summary>如何使 OpenWrt/LEDE 自启动？来自 @艾斯德斯</summary>
+    <summary>Agent 启动/上线 问题自检流程</summary>
 
-首先在 release 下载对应的二进制解压后放置到 `/root/nezha-agent`，然后 `chmod +x /root/nezha-agent` 赋予执行权限，然后创建 `/etc/init.d/nezha-agent`：
+1. 直接执行 `/opt/nezha/agent/nezha-agent -s 面板IP或非CDN域名:面板RPC端口 -p Agent密钥 -d` 查看日志是否是 DNS、网络不佳导致超时（timeout） 问题。
+2. `nc -v 域名/IP 面板RPC端口` 或者 `telnet 域名/IP 面板RPC端口` 检验是否是网络问题，检查本机与面板服务器出入站防火墙，如果单机无法判断可借助 <https://port.ping.pe/> 提供的端口检查工具进行检测。
+3. 如果上面步骤检测正常，Agent 正常上线，尝试关闭 SELinux，[如何关闭 SELinux？](https://www.google.com/search?q=%E5%85%B3%E9%97%ADSELINUX)
 
-```
+</details>
+
+<details>
+    <summary>如何使 旧版OpenWRT/LEDE 自启动？</summary>
+
+参考此项目: <https://github.com/Erope/openwrt_nezha>
+
+</details>
+
+<details>
+    <summary>如何使 新版OpenWRT 自启动？来自 @艾斯德斯</summary>
+
+首先在 release 下载对应的二进制解压 tar.gz 包后放置到 `/root`，然后 `chmod +x /root/nezha-agent` 赋予执行权限，然后创建 `/etc/init.d/nezha-service`：
+
+```shell
 #!/bin/sh /etc/rc.common
 
 START=99
 USE_PROCD=1
 
 start_service() {
-	procd_open_instance
-	procd_set_param command /root/nezha-agent -i xxx -p 111 -d
-	procd_set_param respawn
-	procd_close_instance
+ procd_open_instance
+ procd_set_param command /root/nezha-agent -s 面板网址:接收端口 -p 唯一秘钥 -d
+ procd_set_param respawn
+ procd_close_instance
 }
 
 stop_service() {
@@ -193,44 +280,31 @@ stop_service() {
 }
 
 restart() {
-	stop
-	sleep 2
-	start
+ stop
+ sleep 2
+ start
 }
 ```
 
-赋予执行权限 `chmod +x /etc/init.d/nezha-agent` 然后启动服务 `/etc/init.d/nezha-agent enable && /etc/init.d/nezha-agent start`
+赋予执行权限 `chmod +x /etc/init.d/nezha-service` 然后启动服务 `/etc/init.d/nezha-service enable && /etc/init.d/nezha-service start`
 
 </details>
 
 <details>
-    <summary>首页服务器随机闪烁掉线？</summary>
+    <summary>实时通道断开/在线终端连接失败</summary>
 
-执行 `ntpdate 0.pool.ntp.org` 同步一下面板部署所在的服务器的时间，ref: [How do I use pool.ntp.org?](https://www.ntppool.org/en/use.html)
-
-</details>
-
-<details>
-    <summary>提示实时通道断开？</summary>
-
-### 启用 HTTPS
-
-使用宝塔反代或者上 CDN，建议 Agent 配置 跟 访问管理面板 使用不同的域名，这样管理面板使用的域名可以直接套 CDN，Agent 配置的域名是解析管理面板 IP 使用的，也方便后面管理面板迁移（如果你使用 IP，后面 IP 更换了，需要修改每个 agent，就麻烦了）
-
-### 实时通道断开(WebSocket 反代)
-
-使用反向代理时需要针对 `/ws` 路径的 WebSocket 进行特别配置以支持实时更新服务器状态。
+使用反向代理时需要针对 `/ws`,`/terminal` 路径的 WebSocket 进行特别配置以支持实时更新服务器状态和 **WebSSH**。
 
 - Nginx(宝塔)：在你的 nginx 配置文件中加入以下代码
 
   ```nginx
   server{
 
+      #原有的一些配置
       #server_name blablabla...
 
-      location /ws {
+      location ~ ^/(ws|terminal/.+)$  {
           proxy_pass http://ip:站点访问端口;
-          proxy_http_version 1.1;
           proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection "Upgrade";
           proxy_set_header Host $host;
@@ -240,13 +314,81 @@ restart() {
   }
   ```
 
+  如果非宝塔，还要在 `server{}` 中添加上这一段
+
+  ```nginx
+  location / {
+    proxy_pass http://ip:站点访问端口;
+    proxy_set_header Host $host;
+  }
+  ```
+
 - CaddyServer v1（v2 无需特别配置）
 
   ```Caddyfile
   proxy /ws http://ip:8008 {
       websocket
   }
+  proxy /terminal/* http://ip:8008 {
+      websocket
+  }
   ```
+
+</details>
+
+<details>
+    <summary>反向代理 gRPC 端口（支持 Cloudflare CDN）</summary>
+使用 Nginx 或者 Caddy 反向代理 gRPC
+
+- Nginx 配置
+
+```nginx
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name ip-to-dashboard.nai.ba; # 你的 Agent 连接 Dashboard 的域名
+
+    ssl_certificate          /data/letsencrypt/fullchain.pem; # 你的域名证书路径
+    ssl_certificate_key      /data/letsencrypt/key.pem;       # 你的域名私钥路径
+
+    underscores_in_headers on;
+
+    location / {
+        grpc_read_timeout 300s;
+        grpc_send_timeout 300s;
+        grpc_pass grpc://localhost:5555;
+    }
+}
+```
+
+- Caddy 配置
+
+```Caddyfile
+ip-to-dashboard.nai.ba:443 { # 你的 Agent 连接 Dashboard 的域名
+    reverse_proxy {
+        to localhost:5555
+        transport http {
+            versions h2c 2
+        }
+    }
+}
+```
+
+Dashboard 面板端配置
+
+- 首先登录面板进入管理后台 打开设置页面，在 `未接入CDN的面板服务器域名/IP` 中填入上一步在 Nginx 或 Caddy 中配置的域名 比如 `ip-to-dashboard.nai.ba` ，并保存。
+- 然后在面板服务器中，打开 /opt/nezha/dashboard/data/config.yaml 文件，将 `proxygrpcport` 修改为 Nginx 或 Caddy 监听的端口，比如上一步设置的 `443` ；因为我们在 Nginx 或 Caddy 中开启了 SSL/TLS，所以需要将 `tls` 设置为 `true` ；修改完成后重启面板。
+
+Agent 端配置
+
+- 登录面板管理后台，复制一键安装命令，在对应的服务器上面执行一键安装命令重新安装 agent 端即可。
+
+开启 Cloudflare CDN（可选）
+
+根据 Cloudflare gRPC 的要求：gRPC 服务必须侦听 443 端口 且必须支持 TLS 和 HTTP/2。
+所以如果需要开启 CDN，必须在配置 Nginx 或者 Caddy 反向代理 gRPC 时使用 443 端口，并配置证书（Caddy 会自动申请并配置证书）。
+
+- 登录 Cloudflare，选择使用的域名。打开 `网络` 选项将 `gRPC` 开关打开，打开 `DNS` 选项，找到 Nginx 或 Caddy 反代 gRPC 配置的域名的解析记录，打开橙色云启用 CDN。
 
 </details>
 
@@ -255,4 +397,6 @@ restart() {
 - [哪吒探针 - Windows 客户端安装](https://nyko.me/2020/12/13/nezha-windows-client.html)
 - [哪吒监控，一个便携服务器状态监控面板搭建教程，不想拥有一个自己的探针吗？](https://haoduck.com/644.html)
 - [哪吒监控：小鸡们的最佳探针](https://www.zhujizixun.com/2843.html) _（已过时）_
-- [>>更多教程](https://www.google.com/search?q="哪吒"%2B"面板%7C监控%7C探针"+"教程") (Google)
+- [>>更多教程](https://www.google.com/search?q="哪吒监控"+"教程") (Google)
+
+SEO **云探针、多服务器探针、云监控、多服务器云监控**

@@ -7,7 +7,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <title>{{.Title}}</title>
-    <link rel="shortcut icon" type="image/png" href="/static/logo.png?v20210320" />
+    <link rel="shortcut icon" type="image/png" href="/static/logo.svg?v20210804" />
 
     <!-- Fix chrome language detection -->
     <meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
@@ -69,9 +69,9 @@
                         <td>@#server.Host?server.Host.Platform:'-'#@</td>
                         <td>@#server.Host?server.Host.CountryCode:'-'#@</td>
                         <td>@#server.State?secondToDate(server.State.Uptime):'-'#@</td>
-                        <td>@#server.State?formatByteSize(server.State.NetInSpeed)+'/s|'+formatByteSize(server.State.NetOutSpeed)+'/s':'-'#@
+                        <td>@#server.State?readableBytes(server.State.NetInSpeed)+'/s|'+readableBytes(server.State.NetOutSpeed)+'/s':'-'#@
                         </td>
-                        <td>@#server.State?formatByteSize(server.State.NetInTransfer)+'|'+formatByteSize(server.State.NetOutTransfer):'-'#@
+                        <td>@#server.State?readableBytes(server.State.NetInTransfer)+'|'+readableBytes(server.State.NetOutTransfer):'-'#@
                         </td>
                         <td>
                             <div v-if="server.State" :class="formatPercent(server.live,server.State.CPU, 100).class">
@@ -151,7 +151,7 @@
     <script src="/static/semantic-ui-alerts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vue@2.6.12/dist/vue.min.js"></script>
     <script>
-        const initData = {{.Servers }};
+        const initData = JSON.parse('{{.Servers}}').servers;
         var statusCards = new Vue({
             el: '#app',
             delimiters: ['@#', '#@'],
@@ -191,7 +191,7 @@
                             this.cache[percent].style['background-color'] = 'slategray'
                             this.cache[percent].class.offline = true
                         } else if (percent < 51) {
-                            this.cache[percent].style['background-color'] = 'rgb(0, 235, 139)'
+                            this.cache[percent].style['background-color'] = '#0a94f2'
                             this.cache[percent].class.fine = true
                         } else if (percent < 81) {
                             this.cache[percent].style['background-color'] = 'orange'
@@ -204,9 +204,16 @@
                     return this.cache[percent]
                 },
                 readableBytes(bytes) {
+                    if (!bytes) {
+                        return '0B'
+                    }
                     var i = Math.floor(Math.log(bytes) / Math.log(1024)),
-                        sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-                    return (bytes / Math.pow(1024, i)).toFixed(0) + ' ' + sizes[i];
+                        sizes = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+                    return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + sizes[i];
+                },
+                formatByteSize(bs) {
+                    const x = this.readableBytes(bs)
+                    return x != "NaN undefined" ? x : '0B'
                 },
                 troggleDarkMode() {
                     const hour = new Date(Date.now()).getHours()
@@ -226,10 +233,6 @@
                 },
                 formatTimestamp(t) {
                     return new Date(t * 1000).toLocaleString()
-                },
-                formatByteSize(bs) {
-                    const x = this.readableBytes(bs)
-                    return x != "NaN undefined" ? x : '0 KB'
                 }
             }
         })
@@ -256,13 +259,14 @@
             });
         }
         ws.onmessage = function (evt) {
-            statusCards.servers = JSON.parse(evt.data)
+            const data = JSON.parse(evt.data)
+            statusCards.servers = data.servers
             for (let i = 0; i < statusCards.servers.length; i++) {
                 const ns = statusCards.servers[i];
                 if (!ns.Host) ns.live = false
                 else {
                     const lastActive = new Date(ns.LastActive).getTime()
-                    if (Date.now() - lastActive > 20 * 1000) {
+                    if (data.now - lastActive > 10 * 1000) {
                         ns.live = false
                     } else {
                         ns.live = true

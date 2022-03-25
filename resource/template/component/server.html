@@ -24,11 +24,25 @@
                 <label>备注</label>
                 <textarea name="Note"></textarea>
             </div>
+
+            <div class="command field">
+                <label>Linux 一键安装</label>
+                <div class="ui message">
+                    {{if .Conf.GRPCHost}}
+                    curl -L https://raw.githubusercontent.com/naiba/nezha/master/script/install.sh -o nezha.sh && chmod
+                    +x nezha.sh && sudo ./nezha.sh install_agent <code class="command">{{.Conf.GRPCHost}}</code> <code
+                        class="command">{{if .Conf.ProxyGRPCPort}}{{.Conf.ProxyGRPCPort}}{{else}}{{.Conf.GRPCPort}}{{end}}</code> <code
+                        class="command hostSecret"></code> <code class="command">{{if .Conf.TLS}}--tls{{end}}</code>
+                    {{else}}
+                    请先在设置页面配置 未接入CDN的面板服务器域名/IP
+                    {{end}}
+                </div>
+            </div>
         </form>
     </div>
     <div class=" actions">
         <div class="ui negative button">取消</div>
-        <button class="ui positive right labeled icon button">确认<i class="checkmark icon"></i>
+        <button class="ui positive nezha-primary-btn right labeled icon button">确认<i class="checkmark icon"></i>
         </button>
     </div>
 </div>

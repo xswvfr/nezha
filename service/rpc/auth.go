@@ -3,10 +3,11 @@ package rpc
 import (
 	"context"
 
-	"github.com/naiba/nezha/service/dao"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	"github.com/naiba/nezha/service/singleton"
 )
 
 type AuthHandler struct {
@@ -18,7 +19,7 @@ func (a *AuthHandler) GetRequestMetadata(ctx context.Context, uri ...string) (ma
 }
 
 func (a *AuthHandler) RequireTransportSecurity() bool {
-	return !dao.Conf.Debug
+	return false
 }
 
 func (a *AuthHandler) Check(ctx context.Context) (uint64, error) {
@@ -32,11 +33,14 @@ func (a *AuthHandler) Check(ctx context.Context) (uint64, error) {
 		clientSecret = value[0]
 	}
 
-	dao.ServerLock.RLock()
-	defer dao.ServerLock.RUnlock()
-	clientID, hasID := dao.SecretToID[clientSecret]
-	_, hasServer := dao.ServerList[clientID]
-	if !hasID || !hasServer {
+	singleton.ServerLock.RLock()
+	defer singleton.ServerLock.RUnlock()
+	clientID, hasID := singleton.SecretToID[clientSecret]
+	if !hasID {
+		return 0, status.Errorf(codes.Unauthenticated, "客户端认证失败")
+	}
+	_, hasServer := singleton.ServerList[clientID]
+	if !hasServer {
 		return 0, status.Errorf(codes.Unauthenticated, "客户端认证失败")
 	}
 	return clientID, nil

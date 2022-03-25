@@ -6,8 +6,8 @@
 
 .nb-container {
   padding-top: 75px;
-  min-height: 100%;
-  padding-bottom: 55px;
+  min-height: 100vh;
+  padding-bottom: 65px;
   margin-bottom: -47px;
 }
 
@@ -76,6 +76,7 @@
   line-height: 1.75em;
   color: rgba(255, 255, 255, 0.7);
   font-weight: 700;
+  max-width: 100% !important;
 }
 
 .service-status .delay-today {
@@ -97,9 +98,22 @@
 }
 
 .service-status .good {
-  background-color: rgb(0, 235, 139) !important;
+  background-color: rgb(10, 148, 242) !important;
 }
 
 .service-status .warning {
   background-color: orange !important;
+}
+
+.nezha-primary-btn {
+  background-color: #0338d6 !important;
+  color: white !important;
+}
+
+.nezha-primary-font {
+  color: #0338d6 !important;
+}
+
+.nezha-secondary-font {
+  color: rgb(10, 148, 242) !important;
 }
